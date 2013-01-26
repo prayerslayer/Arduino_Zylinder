@@ -176,16 +176,23 @@ void fadeToColor( int color[ 3 ], int duration, int steptime ) {
   }
 }
 
+// Reads voltage from A0 and returns it
+float getVoltage() {
+  float volt = analogRead( A0 ) * ( 5.0 / 1023.0 );
+  Serial.print( "Voltage: " );
+  Serial.println( volt );
+  return volt;
+}
 
-void loop() 
-{
-  setLedBrightness( 0, random( 2 ) );
-  setLedBrightness( 1, random( 2 ) );
-  fadeToColor( COLOR_BLUE, 500 );
-  delay( 2000 );
-  fadeToColor( COLOR_GREEN, 500 );
-  delay( 2000 );
-  fadeToColor( COLOR_NOPE, 500 );
-  delay( 2000 );
+// Converts voltage to color code and writes it in currentColor
+void setColorFromVoltage( float volt, int[3] color ) {
+  //volt = 1..5
+  currentColor[0] = ((int)volt * 100) % 255;
+}
+
+void loop() {
+  int[3] color;
+  setCurrentColorFromVoltage( getVoltage(), color ) ) ;
+  setColor( color ); 
 }
 

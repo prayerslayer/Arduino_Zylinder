@@ -1,6 +1,7 @@
 #include "math.h"
 
 // PINS
+const int BRIDGE_PIN = 7; // which pin tells us if there's a poti attached?
 const int RED_PIN = 9;    // which pin has cable for red?
 const int GREEN_PIN = 10; // which pin has cable for green?
 const int BLUE_PIN = 11;  // which pin has cable for blue?
@@ -79,6 +80,8 @@ void setColor( int rgb[ 3 ] ) {
 void setup()  { 
   // serial monitor
   Serial.begin( 9600 );
+  // bridge pin
+  pinMode( BRIDGE_PIN, INPUT );
   // led pins
   ledPin[ 0 ] = 5;
   ledPin[ 1 ] = 6;
@@ -88,11 +91,17 @@ void setup()  {
   powerLed( 1, HIGH );
 }
 
+boolean isBridged( ) {
+  Serial.println( (boolean)digitalRead( BRIDGE_PIN ) );
+  return digitalRead( BRIDGE_PIN );
+}
+
 // Fades a LED brightness to target value
 void fadeLed( int led, int targetval ) {
   int currentval = ledIntensity[ led ];
   int stepp = currentval < targetval ? DEFAULT_PCNTG_STEP : DEFAULT_PCNTG_STEP * (-1);
   while ( currentval != targetval ) {
+    Serial.println( "=== fading LED ===");
     currentval += stepp;
     setLedBrightness( led, currentval );
     delay( DEFAULT_PCNTG_DELAY );
@@ -133,6 +142,22 @@ void fadeToColor( int color[ 3 ], int stepdelay ) {
   int diffRed = color[ 0 ] - currentColor[ 0 ];   //possibly negative!
   int diffGreen = color[ 1 ] - currentColor[ 1 ]; //possibly negative!
   int diffBlue = color[ 2 ] - currentColor[ 2 ];  //possibly negative!
+  Serial.println( "-- start color");
+  Serial.println( currentColor[0]);
+  Serial.println( currentColor[1]);
+  Serial.println( currentColor[2]);
+  Serial.println( "-- target color");
+  Serial.println( color[0]);
+  Serial.println( color[1]);
+  Serial.println( color[2]);
+  // is there a reason to fade colors?
+  boolean fadeRed = diffRed != 0;
+  boolean fadeGreen = diffGreen != 0;
+  boolean fadeBlue = diffBlue != 0;
+  
+  if ( !fadeRed && !fadeGreen && !fadeBlue ) {
+    return; //break as soon as possible
+  }
   
   // different steps, because we can fade red up and blue down at the same time
   int stepRed = diffRed < 0 ? DEFAULT_COLOR_STEP * (-1) : DEFAULT_COLOR_STEP;
@@ -143,17 +168,15 @@ void fadeToColor( int color[ 3 ], int stepdelay ) {
   int tempRed = 0;
   int tempGreen = 0;
   int tempBlue = 0;
-  
-  // is there a reason to fade colors?
-  boolean fadeRed = diffRed != 0;
-  boolean fadeGreen = diffGreen != 0;
-  boolean fadeBlue = diffBlue != 0;
 
   // while there is a reason to fade, fade
   while ( fadeRed || fadeGreen || fadeBlue ) {
+    Serial.println( "=== fading color ===");
     // fade red
     if ( fadeRed ) {
       tempRed = currentColor[ 0 ] + stepRed;
+      Serial.print( "R\t");
+      Serial.println( tempRed );
       setColorRed( tempRed );
       fadeRed = diffRed < 0 ? tempRed > color[ 0 ] : tempRed < color[ 0 ]; // means basically tempRed != target value
     }
@@ -161,6 +184,8 @@ void fadeToColor( int color[ 3 ], int stepdelay ) {
     // fade green
     if ( fadeGreen ) {
       tempGreen = currentColor[ 1 ] + stepGreen;
+      Serial.print( "G\t");
+      Serial.println( tempGreen );
       setColorGreen( tempGreen );
       fadeGreen = diffGreen < 0 ? tempGreen > color[ 1 ] : tempGreen < color[ 1 ];
     }
@@ -168,6 +193,8 @@ void fadeToColor( int color[ 3 ], int stepdelay ) {
     // fade blue
     if ( fadeBlue ) {
       tempBlue = currentColor[ 2 ] + stepBlue;
+      Serial.print( "B\t");
+      Serial.println( tempBlue );
       setColorBlue( tempBlue );
       fadeBlue = diffBlue < 0 ? tempBlue > color[ 2 ] : tempBlue < color[ 2 ];
     }
@@ -178,70 +205,73 @@ void fadeToColor( int color[ 3 ], int stepdelay ) {
 // Reads voltage from A0 and returns it
 float getVoltage() {
   float volt = analogRead( A0 ) * ( 5.0 / 1023.0 );
-  return volt;
+  Serial.println( volt );
+  return max( volt - 2.0, 0.0 );
 }
 
 // Converts voltage to color code and writes it in color
 void setColorFromVoltage( float voltage, int *color ) {
-  Serial.println( voltage );
-  int volt = (int) ( voltage * 50 );  // == 250 values ~ 2^8
-  int colorCode = floor( volt/32 ); // 2^8 / 2^5 = 8 different color codes
+  int volt = (int) ( voltage * 128 );  // == 250 values ~ 2^8
+  int colorCode = floor( volt / 32 ); // 2^8 / 2^5 = 8 different color codes
   
   if ( colorCode == 0 ) {
     // no color
     Serial.println( "BLACK" );
-    color[ 0 ] = LED_MINVALUE;
-    color[ 1 ] = LED_MINVALUE;
-    color[ 2 ] = LED_MINVALUE;
+    color[ 0 ] = 0;
+    color[ 1 ] = 0;
+    color[ 2 ] = 0;
   }
   if ( colorCode == 1 ) {
     //red
     Serial.println( "RED" );
-    color[ 0 ] = LED_MAXVALUE;
-    color[ 1 ] = LED_MINVALUE;
-    color[ 2 ] = LED_MINVALUE;
+    color[ 0 ] = 255;
+    color[ 1 ] = 0;
+    color[ 2 ] = 0;
   } else if ( colorCode == 2 ) {
     //green
     Serial.println( "GREEN" );
-    color[ 0 ] = LED_MINVALUE;
-    color[ 1 ] = LED_MAXVALUE;
-    color[ 2 ] = LED_MINVALUE;
+    color[ 0 ] = 0;
+    color[ 1 ] = 255;
+    color[ 2 ] = 0;
   } else if ( colorCode == 3 ) {
     //blue
     Serial.println( "BLUE" );
-    color[ 0 ] = LED_MINVALUE;
-    color[ 1 ] = LED_MINVALUE;
-    color[ 2 ] = LED_MAXVALUE;
+    color[ 0 ] = 0;
+    color[ 1 ] = 0;
+    color[ 2 ] = 255;
   } else if ( colorCode == 4 ) {
     // red + green
     Serial.println( "LIME" );
-    color[ 0 ] = LED_MAXVALUE;
-    color[ 1 ] = LED_MAXVALUE;
-    color[ 2 ] = LED_MINVALUE;
+    color[ 0 ] = 255;
+    color[ 1 ] = 255;
+    color[ 2 ] = 0;
   } else if ( colorCode == 5 ) {
     //red + blue
     Serial.println( "PURPLE" );
-    color[ 0 ] = LED_MAXVALUE;
-    color[ 1 ] = LED_MINVALUE;
-    color[ 2 ] = LED_MAXVALUE;
+    color[ 0 ] = 255;
+    color[ 1 ] = 0;
+    color[ 2 ] = 255;
   } else if ( colorCode == 6 ) {
     // blue + green
     Serial.println( "CYAN" );
-    color[ 0 ] = LED_MINVALUE;
-    color[ 1 ] = LED_MAXVALUE;
-    color[ 2 ] = LED_MAXVALUE;
-  } else if ( colorCode == 7 ) {
+    color[ 0 ] = 0;
+    color[ 1 ] = 255;
+    color[ 2 ] = 255;
+  } else {
     // red + green + blue
     Serial.println( "WHITE" );
-    color[ 0 ] = LED_MAXVALUE;
-    color[ 1 ] = LED_MAXVALUE;
-    color[ 2 ] = LED_MAXVALUE;
+    color[ 0 ] = 255;
+    color[ 1 ] = 255;
+    color[ 2 ] = 255;
   }
 }
 
 void loop() {
-  int color[3];
-  setColorFromVoltage( getVoltage(), &color[0] ) ;
-  fadeToPercentage( getVoltage() / 5 );
-  fadeToColor( color );
+  //if ( isBridged() ) {
+    int color[3];
+    float volt = getVoltage();
+    setColorFromVoltage( volt , &color[0] ) ;
+    fadeToPercentage( volt / 3 );
+    fadeToColor( color );
+  //}
 }

@@ -1,7 +1,6 @@
 #include "math.h"
 
 // PINS
-const int BRIDGE_PIN = 7; // which pin tells us if there's a poti attached?
 const int RED_PIN = 9;    // which pin has cable for red?
 const int GREEN_PIN = 10; // which pin has cable for green?
 const int BLUE_PIN = 11;  // which pin has cable for blue?
@@ -80,8 +79,6 @@ void setColor( int rgb[ 3 ] ) {
 void setup()  { 
   // serial monitor
   Serial.begin( 9600 );
-  // bridge pin
-  pinMode( BRIDGE_PIN, INPUT );
   // led pins
   ledPin[ 0 ] = 5;
   ledPin[ 1 ] = 6;
@@ -93,8 +90,9 @@ void setup()  {
 
 // Check if there is a chip attached to base station
 boolean isBridged( ) {
-  Serial.println( (boolean)digitalRead( BRIDGE_PIN ) );
-  return digitalRead( BRIDGE_PIN );
+  float photo = analogRead( A1 ) * ( 5.0 / 1023.0 );
+  Serial.println( photo );
+  return photo < 3.0 ;
 }
 
 // Fades a LED brightness to target value
@@ -208,7 +206,7 @@ void fadeToColor( int color[ 3 ], int stepdelay ) {
 float getVoltage() {
   float volt = analogRead( A0 ) * ( 5.0 / 1023.0 );
   Serial.println( volt );
-  return max( volt - 2.0, 0.0 );
+  return volt;
 }
 
 // Converts voltage to color code and writes it in color
@@ -269,11 +267,16 @@ void setColorFromVoltage( float voltage, int *color ) {
 }
 
 void loop() {
-  //if ( isBridged() ) {
+  if ( isBridged() ) {
+    // if there is a chip on base station, do whatever the chip is supposed to
     int color[3];
     float volt = getVoltage();
     setColorFromVoltage( volt , &color[0] ) ;
-    fadeToPercentage( volt / 3 );
+    fadeToPercentage( volt / 5 );
     fadeToColor( color );
-  //}
+  } else {
+    // default state
+    fadeToPercentage( 1.0 );
+    fadeToColor( COLOR_RED );
+  }
 }

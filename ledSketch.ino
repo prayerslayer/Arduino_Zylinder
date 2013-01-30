@@ -155,7 +155,8 @@ void fadeToColor( int color[ 3 ], int stepdelay ) {
   boolean fadeGreen = diffGreen != 0;
   boolean fadeBlue = diffBlue != 0;
   
-  if ( !fadeRed && !fadeGreen && !fadeBlue ) {
+  // check if there's a LED on or any difference in color
+  if ( getActiveLeds() == 0 || ( !fadeRed && !fadeGreen && !fadeBlue ) ) {
     return; //break as soon as possible
   }
   
@@ -224,45 +225,45 @@ void setColorFromVoltage( float voltage, int *color ) {
   if ( colorCode == 1 ) {
     //red
     Serial.println( "RED" );
-    color[ 0 ] = 255;
-    color[ 1 ] = 0;
-    color[ 2 ] = 0;
+    color[ 0 ] = LED_MAXVALUE;
+    color[ 1 ] = LED_MINVALUE;
+    color[ 2 ] = LED_MINVALUE;
   } else if ( colorCode == 2 ) {
     //green
     Serial.println( "GREEN" );
-    color[ 0 ] = 0;
-    color[ 1 ] = 255;
-    color[ 2 ] = 0;
+    color[ 0 ] = LED_MINVALUE;
+    color[ 1 ] = LED_MAXVALUE;
+    color[ 2 ] = LED_MINVALUE;
   } else if ( colorCode == 3 ) {
     //blue
     Serial.println( "BLUE" );
-    color[ 0 ] = 0;
-    color[ 1 ] = 0;
-    color[ 2 ] = 255;
+    color[ 0 ] = LED_MINVALUE;
+    color[ 1 ] = LED_MINVALUE;
+    color[ 2 ] = LED_MAXVALUE;
   } else if ( colorCode == 4 ) {
     // red + green
     Serial.println( "LIME" );
-    color[ 0 ] = 255;
-    color[ 1 ] = 255;
-    color[ 2 ] = 0;
+    color[ 0 ] = LED_MAXVALUE;
+    color[ 1 ] = LED_MAXVALUE;
+    color[ 2 ] = LED_MINVALUE;
   } else if ( colorCode == 5 ) {
     //red + blue
     Serial.println( "PURPLE" );
-    color[ 0 ] = 255;
-    color[ 1 ] = 0;
-    color[ 2 ] = 255;
+    color[ 0 ] = LED_MAXVALUE;
+    color[ 1 ] = LED_MINVALUE;
+    color[ 2 ] = LED_MAXVALUE;
   } else if ( colorCode == 6 ) {
     // blue + green
     Serial.println( "CYAN" );
-    color[ 0 ] = 0;
-    color[ 1 ] = 255;
-    color[ 2 ] = 255;
+    color[ 0 ] = LED_MINVALUE;
+    color[ 1 ] = LED_MAXVALUE;
+    color[ 2 ] = LED_MAXVALUE;
   } else {
     // red + green + blue
     Serial.println( "WHITE" );
-    color[ 0 ] = 255;
-    color[ 1 ] = 255;
-    color[ 2 ] = 255;
+    color[ 0 ] = LED_MAXVALUE;
+    color[ 1 ] = LED_MAXVALUE;
+    color[ 2 ] = LED_MAXVALUE;
   }
 }
 

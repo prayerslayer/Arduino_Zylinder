@@ -91,6 +91,7 @@ void setup()  {
   powerLed( 1, HIGH );
 }
 
+// Check if there is a chip attached to base station
 boolean isBridged( ) {
   Serial.println( (boolean)digitalRead( BRIDGE_PIN ) );
   return digitalRead( BRIDGE_PIN );

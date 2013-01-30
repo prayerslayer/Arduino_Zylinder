@@ -8,9 +8,9 @@ const int BLUE_PIN = 11;  // which pin has cable for blue?
 // CONSTANTS
 const int LED_COUNT = 2;              // how many leds are there?
 const int DEFAULT_COLOR_DELAY = 10;   // 10 ms
-const int DEFAULT_PCNTG_DELAY = 50;   // 50 ms
-const int DEFAULT_COLOR_STEP = 5;     // 5 gray values
-const int DEFAULT_PCNTG_STEP = 51;    // 20 % brightness
+const int DEFAULT_PCNTG_DELAY = 50;  // 50 ms
+const int DEFAULT_COLOR_STEP = 5;     // 5 gray values, 51 steps, 500 ms
+const int DEFAULT_PCNTG_STEP = 51;    // 20 % brightness, 5 steps, 250 ms
 const int LED_MAXVALUE = 255;
 const int LED_MINVALUE = 0;
 
@@ -190,52 +190,52 @@ void setColorFromVoltage( float voltage, int *color ) {
   if ( colorCode == 0 ) {
     // no color
     Serial.println( "BLACK" );
-    color[ 0 ] = 0;
-    color[ 1 ] = 0;
-    color[ 2 ] = 0;
+    color[ 0 ] = LED_MINVALUE;
+    color[ 1 ] = LED_MINVALUE;
+    color[ 2 ] = LED_MINVALUE;
   }
   if ( colorCode == 1 ) {
     //red
     Serial.println( "RED" );
-    color[ 0 ] = 255;
-    color[ 1 ] = 0;
-    color[ 2 ] = 0;
+    color[ 0 ] = LED_MAXVALUE;
+    color[ 1 ] = LED_MINVALUE;
+    color[ 2 ] = LED_MINVALUE;
   } else if ( colorCode == 2 ) {
     //green
     Serial.println( "GREEN" );
-    color[ 0 ] = 0;
-    color[ 1 ] = 255;
-    color[ 2 ] = 0;
+    color[ 0 ] = LED_MINVALUE;
+    color[ 1 ] = LED_MAXVALUE;
+    color[ 2 ] = LED_MINVALUE;
   } else if ( colorCode == 3 ) {
     //blue
     Serial.println( "BLUE" );
-    color[ 0 ] = 0;
-    color[ 1 ] = 0;
-    color[ 2 ] = 255;
+    color[ 0 ] = LED_MINVALUE;
+    color[ 1 ] = LED_MINVALUE;
+    color[ 2 ] = LED_MAXVALUE;
   } else if ( colorCode == 4 ) {
     // red + green
     Serial.println( "LIME" );
-    color[ 0 ] = 255;
-    color[ 1 ] = 255;
-    color[ 2 ] = 0;
+    color[ 0 ] = LED_MAXVALUE;
+    color[ 1 ] = LED_MAXVALUE;
+    color[ 2 ] = LED_MINVALUE;
   } else if ( colorCode == 5 ) {
     //red + blue
     Serial.println( "PURPLE" );
-    color[ 0 ] = 255;
-    color[ 1 ] = 0;
-    color[ 2 ] = 255;
+    color[ 0 ] = LED_MAXVALUE;
+    color[ 1 ] = LED_MINVALUE;
+    color[ 2 ] = LED_MAXVALUE;
   } else if ( colorCode == 6 ) {
     // blue + green
     Serial.println( "CYAN" );
-    color[ 0 ] = 0;
-    color[ 1 ] = 255;
-    color[ 2 ] = 255;
+    color[ 0 ] = LED_MINVALUE;
+    color[ 1 ] = LED_MAXVALUE;
+    color[ 2 ] = LED_MAXVALUE;
   } else if ( colorCode == 7 ) {
     // red + green + blue
     Serial.println( "WHITE" );
-    color[ 0 ] = 255;
-    color[ 1 ] = 255;
-    color[ 2 ] = 255;
+    color[ 0 ] = LED_MAXVALUE;
+    color[ 1 ] = LED_MAXVALUE;
+    color[ 2 ] = LED_MAXVALUE;
   }
 }
 

@@ -1,6 +1,7 @@
 #include "math.h"
 
 // PINS
+const int BRIDGE_PIN = 7; // which pin has cable for reed sensor?
 const int RED_PIN = 9;    // which pin has cable for red?
 const int GREEN_PIN = 10; // which pin has cable for green?
 const int BLUE_PIN = 11;  // which pin has cable for blue?
@@ -79,6 +80,8 @@ void setColor( int rgb[ 3 ] ) {
 void setup()  { 
   // serial monitor
   Serial.begin( 9600 );
+  // bridge pin
+  pinMode( BRIDGE_PIN, INPUT );
   // led pins
   ledPin[ 0 ] = 5;
   ledPin[ 1 ] = 6;
@@ -90,9 +93,9 @@ void setup()  {
 
 // Check if there is a chip attached to base station
 boolean isBridged( ) {
-  float photo = analogRead( A1 ) * ( 5.0 / 1023.0 );
-  Serial.println( photo );
-  return photo < 3.0 ;
+  boolean bridged = digitalRead( BRIDGE_PIN );
+  Serial.println( bridged );
+  return bridged;
 }
 
 // Fades a LED brightness to target value
@@ -141,14 +144,14 @@ void fadeToColor( int color[ 3 ], int stepdelay ) {
   int diffRed = color[ 0 ] - currentColor[ 0 ];   //possibly negative!
   int diffGreen = color[ 1 ] - currentColor[ 1 ]; //possibly negative!
   int diffBlue = color[ 2 ] - currentColor[ 2 ];  //possibly negative!
-  Serial.println( "-- start color");
+  /*Serial.println( "-- start color");
   Serial.println( currentColor[0]);
   Serial.println( currentColor[1]);
   Serial.println( currentColor[2]);
   Serial.println( "-- target color");
   Serial.println( color[0]);
   Serial.println( color[1]);
-  Serial.println( color[2]);
+  Serial.println( color[2]);*/
   // is there a reason to fade colors?
   boolean fadeRed = diffRed != 0;
   boolean fadeGreen = diffGreen != 0;
@@ -205,53 +208,59 @@ void fadeToColor( int color[ 3 ], int stepdelay ) {
 // Reads voltage from A0 and returns it
 float getVoltage() {
   float volt = analogRead( A0 ) * ( 5.0 / 1023.0 );
-  Serial.println( volt );
+  Serial.print( volt );
+  Serial.println( " V");
   return volt;
 }
 
+// Reads voltage and transforms it into chip code
+int getChipCode() {
+  float volt = getVoltage();
+  int chip = floor( ( (int) volt * 50 ) / 32 ); // 0-5 * 50 = 0-250 ~ 2^8 / 2^5 = 2^3 = 8 chips
+  return min( chip, 7 ); // falls doch mal mehr als 5V reingehen sollten
+}
+
 // Converts voltage to color code and writes it in color
-void setColorFromVoltage( float voltage, int *color ) {
-  int volt = (int) ( voltage * 128 );  // == 250 values ~ 2^8
-  int colorCode = floor( volt / 32 ); // 2^8 / 2^5 = 8 different color codes
+void setColorFromChipCode( int chip, int *color ) {
   
-  if ( colorCode == 0 ) {
+  if ( chip == 0 ) {
     // no color
     Serial.println( "BLACK" );
     color[ 0 ] = 0;
     color[ 1 ] = 0;
     color[ 2 ] = 0;
   }
-  if ( colorCode == 1 ) {
+  if ( chip == 1 ) {
     //red
     Serial.println( "RED" );
     color[ 0 ] = LED_MAXVALUE;
     color[ 1 ] = LED_MINVALUE;
     color[ 2 ] = LED_MINVALUE;
-  } else if ( colorCode == 2 ) {
+  } else if ( chip == 2 ) {
     //green
     Serial.println( "GREEN" );
     color[ 0 ] = LED_MINVALUE;
     color[ 1 ] = LED_MAXVALUE;
     color[ 2 ] = LED_MINVALUE;
-  } else if ( colorCode == 3 ) {
+  } else if ( chip == 3 ) {
     //blue
     Serial.println( "BLUE" );
     color[ 0 ] = LED_MINVALUE;
     color[ 1 ] = LED_MINVALUE;
     color[ 2 ] = LED_MAXVALUE;
-  } else if ( colorCode == 4 ) {
+  } else if ( chip == 4 ) {
     // red + green
     Serial.println( "LIME" );
     color[ 0 ] = LED_MAXVALUE;
     color[ 1 ] = LED_MAXVALUE;
     color[ 2 ] = LED_MINVALUE;
-  } else if ( colorCode == 5 ) {
+  } else if ( chip == 5 ) {
     //red + blue
     Serial.println( "PURPLE" );
     color[ 0 ] = LED_MAXVALUE;
     color[ 1 ] = LED_MINVALUE;
     color[ 2 ] = LED_MAXVALUE;
-  } else if ( colorCode == 6 ) {
+  } else if ( chip == 6 ) {
     // blue + green
     Serial.println( "CYAN" );
     color[ 0 ] = LED_MINVALUE;
@@ -264,14 +273,16 @@ void setColorFromVoltage( float voltage, int *color ) {
     color[ 1 ] = LED_MAXVALUE;
     color[ 2 ] = LED_MAXVALUE;
   }
+  
 }
 
 void loop() {
-  if ( isBridged() ) {
+ if ( isBridged() ) {
     // if there is a chip on base station, do whatever the chip is supposed to
     int color[3];
     float volt = getVoltage();
-    setColorFromVoltage( volt , &color[0] ) ;
+    int chip = getChipCode();
+    setColorFromChipCode( chip , &color[0] ) ;
     fadeToPercentage( volt / 5 );
     fadeToColor( color );
   } else {

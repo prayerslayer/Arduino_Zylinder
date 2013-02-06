@@ -2,7 +2,7 @@
 #include "Wire.h"
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
-
+#include <RunningMedian.h>
 // PINS
 const int BRIDGE_PIN = 7; // which pin has cable for reed sensor?
 const int RED_PIN = 9;    // which pin has cable for red?
@@ -37,7 +37,7 @@ const int CHIP_FUEL = 4;      // color and identifier for fuel chip
 const int CHIP_TRUNK = 7;     // color and identifier for trunk chip
 const float RADIUS = 4.0;    // radius of base station and chips - entspricht dem deckel eines kleinen nutellaglases
 // fuel chip
-float fuelFill = 0.6;         // amount of tankfüllung
+float fuelFill = 0.9;         // amount of tankfüllung
 int fuelScale = 2;            // how many km equal 1 cm rolling?
 int fuelRange = fuelFill * 35/4.5 * 100;  // based on toyota aigo
 // trunk chip
@@ -55,8 +55,8 @@ boolean lying = false;          // if base station is lying for sure
 float cumulativeRevolutions = 0.0;  // how many revolutions since last standing
 boolean initialized = false;
 boolean fifoOverflow = false;  // if there was a FIFO overflow in last gyro processing
-int octant = 0;  // current angle of base statoin
-int lastOctant = 0;
+int quadrant = 0;  // current angle of base statoin
+int lastQuadrant = 0;
 
 // GYRO SENSOR
 MPU6050 mpu;            // gyro sensor
@@ -69,13 +69,13 @@ uint8_t fifoBuffer[64]; // FIFO storage buffer
 
 Quaternion q;           // [w, x, y, z]         quaternion container
 VectorFloat gravity;    // [x, y, z]            gravity vector
-float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 VectorInt16 aa;         // [x, y, z]            accel sensor measurements
 VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements 
-VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
-float euler[3];         // [psi, theta, phi]    Euler angle container
 float acceleration[ 3 ];               // current acceleration values
 float baseAcceleration[ 3 ];   // acceleration values at initialization
+RunningMedian xAccelerations = RunningMedian( 6 );
+RunningMedian yAccelerations = RunningMedian( 6 );
+RunningMedian zAccelerations = RunningMedian( 6 );
 
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
 
@@ -316,16 +316,6 @@ int getChipCode() {
   return min( chip, 7 ); // falls doch mal mehr als 5V reingehen sollten
 }
 
-
-// Converts chip code to percentage
-float setPercentageFromChipCode( int chip ) {
-  switch ( chip ) {
-    case CHIP_PERSON: return 1.0;
-    case CHIP_FUEL: return 0.4;
-    default: return 0.0;
-  }
-}
-
 // Converts voltage to color code and writes it in color
 void setColorFromChipCode( int chip, int *color ) {
   
@@ -398,16 +388,16 @@ void processGyro() {
   fifoCount = mpu.getFIFOCount();
   
   // if there was FIFO overflow before, return because values are probably shit anyway
-  if ( fifoOverflow ) {
+  /*if ( fifoOverflow ) {
     fifoOverflow = false;
     return;
-  }
+  }*/
   
   // check for overflow
   if ( ( mpuIntStatus & 0x10 ) || fifoCount == 1024 ) {
     fifoOverflow = true;
     mpu.resetFIFO();
-    Serial.println( "FIFO overflow");
+    Serial.println( "=============>>> FIFO overflow");
   // else check for DMP data ready
   } else if ( mpuIntStatus & 0x02 ) {
     // wait for correct data length
@@ -421,23 +411,20 @@ void processGyro() {
 
     // output as ypr
     mpu.dmpGetQuaternion(&q, fifoBuffer);
-    mpu.dmpGetEuler( euler, &q );
     mpu.dmpGetAccel(&aa, fifoBuffer);
     mpu.dmpGetGravity(&gravity, &q);
-    mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
     mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
-    mpu.dmpGetLinearAccelInWorld( &aaWorld, &aaReal, &q );
-    // set values in degrees 
-    ypr[ 0 ] = ypr[0] * 180/M_PI;
-    ypr[ 1 ] = ypr[1] * 180/M_PI;
-    ypr[ 2 ] = ypr[2] * 180/M_PI;
-    
 
     // scale accelerometer sensitivity
-    acceleration[ 0 ] = ( float ) aaReal.x / ACCEL_SENSITIVITY_SCALE - abs( baseAcceleration[ 0 ] );
-    acceleration[ 1 ] = ( float ) aaReal.y / ACCEL_SENSITIVITY_SCALE - abs( baseAcceleration[ 1 ] );
-    acceleration[ 2 ] = ( float ) aaReal.z / ACCEL_SENSITIVITY_SCALE - abs( baseAcceleration[ 2 ] );
-
+    acceleration[ 0 ] = ( float ) aaReal.x / ACCEL_SENSITIVITY_SCALE;
+    acceleration[ 1 ] = ( float ) aaReal.y / ACCEL_SENSITIVITY_SCALE;
+    acceleration[ 2 ] = ( float ) aaReal.z / ACCEL_SENSITIVITY_SCALE;
+    
+    xAccelerations.add( acceleration[ 0 ] );
+    yAccelerations.add( acceleration[ 1 ] );
+    zAccelerations.add( acceleration[ 2 ] );
+    
+/* 
     Serial.print("ypr\t");
     Serial.print(ypr[0]);
     Serial.print("\t");
@@ -445,7 +432,7 @@ void processGyro() {
     Serial.print("\t");
     Serial.println(ypr[2]);
     
-/*    
+   
     Serial.print("accel\t");
     Serial.print(aaReal.x);
     Serial.print("\t");
@@ -453,12 +440,19 @@ void processGyro() {
     Serial.print("\t");
     Serial.println(aaReal.z);
 */    
-    Serial.print("accel\t");
+    
+    Serial.print( "accel_pur\t");
     Serial.print(acceleration[ 0 ]);
-    Serial.print("\t");
+    Serial.print( "\t");
     Serial.print(acceleration[ 1 ]);
-    Serial.print("\t");
+    Serial.print( "\t");
     Serial.println(acceleration[ 2 ]);
+    Serial.print("accel_med\t");
+    Serial.print( xAccelerations.getAverage() );
+    Serial.print("\t");
+    Serial.print( yAccelerations.getAverage() );
+    Serial.print("\t");
+    Serial.println( zAccelerations.getAverage() );
   }
 }
 
@@ -466,11 +460,12 @@ void processGyro() {
 void updateStanding() {
  
   // Standing means near initial values
-  standing = abs( acceleration[ 2 ] ) < 0.1 && abs( acceleration[ 0 ] ) < 0.1 && abs( acceleration[ 1 ] ) < 0.1;
-  // Acceleraton on X/Y axis means lying
-  float xy =  abs( acceleration[ 0 ] ) + abs( acceleration[ 1 ] );
-  lying = xy > 0.4;
+  float z = abs( zAccelerations.getAverage() );
   
+  // Acceleraton on X/Y axis means lying
+  float xy =  abs( xAccelerations.getAverage() ) + abs( yAccelerations.getAverage() );
+  lying = xy >= 0.5 && z < 0.1;
+  standing = z > 0.5;
   /*
   Serial.print( "pitched?\t");
   Serial.println( pitched );
@@ -489,55 +484,47 @@ void updateStanding() {
 }
 
 void updateRevolutions() {
-  // check octants
-  float x = acceleration[ 0 ];
-  float y = acceleration[ 1 ];
+  // check quadrants
+  float x = xAccelerations.getAverage();
+  float y = yAccelerations.getAverage();
 
   // pluck values into interval 0.5..-0.5
   x = min( max( x, -0.5 ), 0.5 );
   y = min( max( y, -0.5 ), 0.5 );
   
   if ( x > 0 && y > 0 ) {
-    octant = 1;
-    if ( x > 0.25 )
-      octant = 2;
+    quadrant = 1;
   } else if ( x < 0 && y > 0 ) {
-    octant = 3;
-    if ( y < 0.25 )
-      octant = 4;
+    quadrant = 2;
   } else if ( x < 0 && y < 0 ) {
-    octant = 5;
-    if ( x < 0.25 )
-      octant = 6;
+    quadrant = 3;
   } else if ( x > 0 && y < 0 ) {
-    octant = 7;
-    if ( y > 0.25 )
-      octant = 8;
+    quadrant = 4;
   }
   
-  if ( lastOctant == 0 ) {
-    lastOctant = octant;
+  if ( lastQuadrant == 0 ) {
+    lastQuadrant = quadrant;
     return;
   }
 
-  int diff = octant - lastOctant;
+  int diff = quadrant - lastQuadrant;
  /*
   Serial.print( "quad:\t");
-  Serial.println( octant );
+  Serial.println( quadrant );
   Serial.print( "lastq:\t");
-  Serial.println( lastOctant);
+  Serial.println( lastQuadrant);
  */
   if ( abs( diff ) >= 1 ) {
     
-    if ( abs( diff ) == 7 ) {
+    if ( abs( diff ) == 3 ) {
       if ( diff < 0 )
         diff = 1;
       if ( diff > 0 )
         diff = -1;
     }
   
-    cumulativeRevolutions += diff * PI / 4;
-    lastOctant = octant;
+    cumulativeRevolutions += diff * PI / 2;
+    lastQuadrant = quadrant;
   }
 }
 
@@ -553,12 +540,11 @@ float convertRevolutionsToPath() {
 
 void resetRevolutions() {
   cumulativeRevolutions = 0.0;
-  octant = 0;
-  lastOctant = 0;
+  quadrant = 0;
+  lastQuadrant = 0;
 }
 
-void processChip( chip, standing ) {
-
+void processChip( int chip, boolean standing ) {
   if ( lastChip != chip ) {
       // chip is fresh!
       if ( lastChip == CHIP_TRUNK ) {

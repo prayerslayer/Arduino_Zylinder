@@ -388,10 +388,10 @@ void processGyro() {
   fifoCount = mpu.getFIFOCount();
   
   // if there was FIFO overflow before, return because values are probably shit anyway
-  /*if ( fifoOverflow ) {
+  if ( fifoOverflow ) {
     fifoOverflow = false;
     return;
-  }*/
+  }
   
   // check for overflow
   if ( ( mpuIntStatus & 0x10 ) || fifoCount == 1024 ) {
@@ -414,45 +414,22 @@ void processGyro() {
     mpu.dmpGetAccel(&aa, fifoBuffer);
     mpu.dmpGetGravity(&gravity, &q);
     mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
+    
+    // take average of last accelerations
+    xAccelerations.add( ( float ) aaReal.x / ACCEL_SENSITIVITY_SCALE );
+    yAccelerations.add( ( float ) aaReal.y / ACCEL_SENSITIVITY_SCALE );
+    zAccelerations.add( ( float ) aaReal.z / ACCEL_SENSITIVITY_SCALE );
 
-    // scale accelerometer sensitivity
-    acceleration[ 0 ] = ( float ) aaReal.x / ACCEL_SENSITIVITY_SCALE;
-    acceleration[ 1 ] = ( float ) aaReal.y / ACCEL_SENSITIVITY_SCALE;
-    acceleration[ 2 ] = ( float ) aaReal.z / ACCEL_SENSITIVITY_SCALE;
-    
-    xAccelerations.add( acceleration[ 0 ] );
-    yAccelerations.add( acceleration[ 1 ] );
-    zAccelerations.add( acceleration[ 2 ] );
-    
-/* 
-    Serial.print("ypr\t");
-    Serial.print(ypr[0]);
-    Serial.print("\t");
-    Serial.print(ypr[1]);
-    Serial.print("\t");
-    Serial.println(ypr[2]);
-    
-   
+    acceleration[ 0 ] = xAccelerations.getAverage();
+    acceleration[ 1 ] = yAccelerations.getAverage();
+    acceleration[ 2 ] = zAccelerations.getAverage();
+
     Serial.print("accel\t");
-    Serial.print(aaReal.x);
+    Serial.print( acceleration[ 0 ] );
     Serial.print("\t");
-    Serial.print(aaReal.y);
+    Serial.print( acceleration[ 1 ] );
     Serial.print("\t");
-    Serial.println(aaReal.z);
-*/    
-    
-    Serial.print( "accel_pur\t");
-    Serial.print(acceleration[ 0 ]);
-    Serial.print( "\t");
-    Serial.print(acceleration[ 1 ]);
-    Serial.print( "\t");
-    Serial.println(acceleration[ 2 ]);
-    Serial.print("accel_med\t");
-    Serial.print( xAccelerations.getAverage() );
-    Serial.print("\t");
-    Serial.print( yAccelerations.getAverage() );
-    Serial.print("\t");
-    Serial.println( zAccelerations.getAverage() );
+    Serial.println( acceleration[ 2 ] );
   }
 }
 
@@ -460,33 +437,25 @@ void processGyro() {
 void updateStanding() {
  
   // Standing means near initial values
-  float z = abs( zAccelerations.getAverage() );
+  float z = abs( acceleration[ 2 ] );
   
   // Acceleraton on X/Y axis means lying
-  float xy =  abs( xAccelerations.getAverage() ) + abs( yAccelerations.getAverage() );
+  float xy =  abs( acceleration[ 0 ] ) + abs( acceleration[ 1 ] );
   lying = xy >= 0.5 && z < 0.1;
   standing = z > 0.5;
-  /*
-  Serial.print( "pitched?\t");
-  Serial.println( pitched );
-  Serial.print( "!pitched?\t");
-  Serial.println( not_pitched );
-  Serial.print( "rolled?\t");
-  Serial.println( rolled );
-  Serial.print( "!rolled?\t");
-  Serial.println( rolled );
-  
-  Serial.print( "standing?\t");
-  Serial.println( standing );
-  Serial.print( "lying?\t");
-  Serial.println( lying );
+  /*  
+    Serial.print( "standing?\t");
+    Serial.println( standing );
+    Serial.print( "lying?\t");
+    Serial.println( lying );
   */
 }
 
+// Estimate distance based on x/y acceleration
 void updateRevolutions() {
   // check quadrants
-  float x = xAccelerations.getAverage();
-  float y = yAccelerations.getAverage();
+  float x = acceleration[ 0 ];
+  float y = acceleration[ 1 ];
 
   // pluck values into interval 0.5..-0.5
   x = min( max( x, -0.5 ), 0.5 );
@@ -528,48 +497,79 @@ void updateRevolutions() {
   }
 }
 
+// Convert revolutions to distance in cm
 float convertRevolutionsToPath() {
   // convert revolutions to radians: revolutions * 2 PI
   // calculate arc length: radians * radius
   float path = abs( cumulativeRevolutions ) * RADIUS;
-  Serial.print( "DISTANCE\t");
-  Serial.print( path );
-  Serial.println( " cm ");
+  /*
+    Serial.print( "DISTANCE\t");
+    Serial.print( path );
+    Serial.println( " cm ");
+  */
   return path;
 }
 
+// Reset variables used for distance calculation
 void resetRevolutions() {
   cumulativeRevolutions = 0.0;
   quadrant = 0;
   lastQuadrant = 0;
 }
 
+/* 
+  Contains ALL the actions that need to be done in case
+    *) the chip changed
+    *) the position changed
+
+  Does unity communication too!
+*/
 void processChip( int chip, boolean standing ) {
   if ( lastChip != chip ) {
       // chip is fresh!
       if ( lastChip == CHIP_TRUNK ) {
         // close trunk
-        // send group|2#trunk|0 to unity    
+        Serial.println( "group|2#trunk|0" );
+        delay( 100 );
       }
       if ( chip == CHIP_TRUNK ) {
         // open trunk
-        // send group|2#trunk|1 to unity    
+        Serial.println( "group|2#trunk|1" );
+        delay( 100 );
       }
-      
+      if ( lastChip == CHIP_PERSON ) {
+        powerLed( 0, HIGH );
+        powerLed( 1, HIGH );
+      }
+      if ( chip == CHIP_PERSON ) {
+        // show people
+        Serial.print( "group|2#person|0#present|0#color|" );
+        Serial.print( COLOR_RED[ 0 ], HEX );
+        Serial.print( COLOR_RED[ 1 ], HEX );
+        Serial.print( COLOR_RED[ 2 ], HEX );
+        Serial.println();
+        delay( 100 );
+        Serial.print( "group|2#person|1#present|1#color|" );
+        Serial.print( COLOR_RED[ 0 ], HEX );
+        Serial.print( COLOR_RED[ 1 ], HEX );
+        Serial.print( COLOR_RED[ 2 ], HEX );
+        Serial.println();
+        delay( 100 );
+        powerLed( 0, LOW );
+        powerLed( 1, HIGH );
+      }
     }
 
   if ( standing ) {
-    // standing
     if ( chip == CHIP_PERSON ) {
-      powerLed( 0, HIGH );
-      powerLed( 1, LOW );
-      // send group|2#person|0#present|1#color|xyz
-      // send group|2#person|1#present|0#color|xyz
+      // nothing happens
     } else if ( chip == CHIP_FUEL ) {
       // show amount of fuel left
       fadeToPercentage( fuelFill );
     } else if ( chip == CHIP_TRUNK ) {
       // show amount of trunk space
+      Serial.println( "group|2#trunkspace|100" );
+      delay( 100 );
       fadeToPercentage( 1.0 );
     }
   } else {
@@ -578,14 +578,16 @@ void processChip( int chip, boolean standing ) {
       // do nothing
     } else if ( chip == CHIP_FUEL ) {
       // set percentage from distance/maxdistance
-      float fuelRangeAvailable = max( fuelFill, convertRevolutionsToPath() * fuelScale / fuelRange );
-      fadeToPercentage( 1 - fuelRangeAvailable );
+      float fuelRangeAvailable = min( fuelFill, convertRevolutionsToPath() * fuelScale / fuelRange );
+      fadeToPercentage( fuelRangeAvailable );
       // no unity here
     } else if ( chip == CHIP_TRUNK ) {
       // set percentage from distance/trunk
-      float trunkFree = max( 1, convertRevolutionsToPath()*trunkScale / trunkCapacity );
-      fadeToPercentage( 1 - trunkFree );
-      // send group|2#trunkspace|trunkFree
+      float trunkFree = min( 1, convertRevolutionsToPath()*trunkScale / trunkCapacity );
+      fadeToPercentage( trunkFree );
+      Serial.print( "group|2#trunkspace|" );
+      Serial.println( (int) ( trunkFree * 100 ) );
+      delay( 100 );
     }
   }
   lastChip = chip;
@@ -634,7 +636,6 @@ void loop() {
   }
   // base is lying
   if ( !standing && lying ) {
-    // set percentage based on path travelled
     updateRevolutions();
     processChip( chip, false );
   }

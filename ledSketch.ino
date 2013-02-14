@@ -143,9 +143,10 @@ void dmpDataReady() {
 
 // Basic setup, actual initialization is done in initialize()
 void setup()  { 
+  delay( 2000 );
   // serial monitor
   Serial.begin( 9600 );
-  
+  Serial.println( "Running setup..." );
   // Gyro stuff
   Wire.begin();
   Serial.println( "Init I2C...");
@@ -159,7 +160,7 @@ void setup()  {
     Serial.println( "Success.");
     mpu.setDMPEnabled( true );
     //enable interrupt detection
-    attachInterrupt( 0, dmpDataReady, RISING );
+    //attachInterrupt( 0, dmpDataReady, RISING );
     mpuIntStatus = mpu.getIntStatus();
     dmpReady = true;
     packetSize = mpu.dmpGetFIFOPacketSize();
@@ -201,6 +202,7 @@ boolean isBridged( ) {
 
 // Fades a LED brightness to target value
 void fadeLed( int led, int targetval ) {
+  Serial.println( "==== fading ==== ");
   int currentval = ledIntensity[ led ];
   int stepp = currentval < targetval ? DEFAULT_PCNTG_STEP : DEFAULT_PCNTG_STEP * (-1);
   while ( currentval != targetval ) {
@@ -276,7 +278,7 @@ void fadeToColor( int color[ 3 ], int stepdelay ) {
 
   // while there is a reason to fade, fade
   while ( fadeRed || fadeGreen || fadeBlue ) {
-    //Serial.println( "=== fading color ===");
+    Serial.println( "=== fading color ===");
     // fade red
     if ( fadeRed ) {
       tempRed = currentColor[ 0 ] + stepRed;
@@ -377,21 +379,19 @@ void processGyro() {
   if ( !dmpReady )
     return;
   
-  // wait for data
-  while (!mpuInterrupt && fifoCount < packetSize) {
-        
-  }
-    
-  // reset flags and get fifo count
-  mpuInterrupt = false;
-  mpuIntStatus = mpu.getIntStatus();
-  fifoCount = mpu.getFIFOCount();
-  
-  // if there was FIFO overflow before, return because values are probably shit anyway
   if ( fifoOverflow ) {
     fifoOverflow = false;
     return;
   }
+
+  // reset flags and get fifo count
+  //mpuInterrupt = false;
+  mpuIntStatus = mpu.getIntStatus();
+  fifoCount = mpu.getFIFOCount();
+
+  Serial.print( mpuIntStatus );
+  Serial.print( "\t" );
+  Serial.println( mpuIntStatus & 0x10 );
   
   // check for overflow
   if ( ( mpuIntStatus & 0x10 ) || fifoCount == 1024 ) {
@@ -407,7 +407,9 @@ void processGyro() {
     // read a packet
     mpu.getFIFOBytes( fifoBuffer, packetSize );
     
-    fifoCount -= packetSize;
+    // reset fifo
+    mpu.resetFIFO();
+    fifoCount = 0;
 
     // output as ypr
     mpu.dmpGetQuaternion(&q, fifoBuffer);
@@ -530,12 +532,12 @@ void processChip( int chip, boolean standing ) {
       if ( lastChip == CHIP_TRUNK ) {
         // close trunk
         Serial.println( "group|2#trunk|0" );
-        delay( 100 );
+        //delay( 100 );
       }
       if ( chip == CHIP_TRUNK ) {
         // open trunk
         Serial.println( "group|2#trunk|1" );
-        delay( 100 );
+        //delay( 100 );
       }
       if ( lastChip == CHIP_PERSON ) {
         powerLed( 0, HIGH );
@@ -548,13 +550,13 @@ void processChip( int chip, boolean standing ) {
         Serial.print( COLOR_RED[ 1 ], HEX );
         Serial.print( COLOR_RED[ 2 ], HEX );
         Serial.println();
-        delay( 100 );
+        //delay( 100 );
         Serial.print( "group|2#person|1#present|1#color|" );
         Serial.print( COLOR_RED[ 0 ], HEX );
         Serial.print( COLOR_RED[ 1 ], HEX );
         Serial.print( COLOR_RED[ 2 ], HEX );
         Serial.println();
-        delay( 100 );
+        //delay( 100 );
         powerLed( 0, LOW );
         powerLed( 1, HIGH );
       }
@@ -569,7 +571,7 @@ void processChip( int chip, boolean standing ) {
     } else if ( chip == CHIP_TRUNK ) {
       // show amount of trunk space
       Serial.println( "group|2#trunkspace|100" );
-      delay( 100 );
+      //delay( 100 );
       fadeToPercentage( 1.0 );
     }
   } else {
@@ -587,13 +589,14 @@ void processChip( int chip, boolean standing ) {
       fadeToPercentage( trunkFree );
       Serial.print( "group|2#trunkspace|" );
       Serial.println( (int) ( trunkFree * 100 ) );
-      delay( 100 );
+      //delay( 100 );
     }
   }
   lastChip = chip;
 }
 
 void loop() {
+  Serial.println( "loop ");
   
   int chip = 0;
   int color[3];
@@ -602,7 +605,7 @@ void loop() {
   processGyro();
 
   // wait to get stable values
-  if ( millis() < 2000 )
+  if ( millis() < 5000 )
     return;
 
   // initialize LEDs and stuff

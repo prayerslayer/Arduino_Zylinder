@@ -3,11 +3,16 @@
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 #include <RunningMedian.h>
+
+#define DEF_USE_POTI;
+#define DEF_USE_UNITY;
+
 // PINS
-const int BRIDGE_PIN = 7; // which pin has cable for reed sensor?
-const int RED_PIN = 9;    // which pin has cable for red?
-const int GREEN_PIN = 10; // which pin has cable for green?
-const int BLUE_PIN = 11;  // which pin has cable for blue?
+const int POTI_PIN = A1;   // which pin has the potentiometer attached?
+const int BRIDGE_PIN = 12; // which pin has cable for reed sensor?
+const int RED_PIN = 8;    // which pin has cable for red?
+const int GREEN_PIN = 7; // which pin has cable for green?
+const int BLUE_PIN = 4;  // which pin has cable for blue?
 
 /*
   OTHER USED PINS:
@@ -15,27 +20,32 @@ const int BLUE_PIN = 11;  // which pin has cable for blue?
     ANALOG 4, ANALOG 5: Gyro I2C
 */
 
-
-/*
-  TODO: berechnung von stehend/liegend mit baseAcceleration
-  TODO: berechnung von weg durch änderung in accelerometer
-*/
-
 // CONSTANTS
-const int LED_COUNT = 2;              // how many leds are there?
+const int LED_COUNT = 5;              // how many leds are there?
 const int DEFAULT_COLOR_DELAY = 10;   // 10 ms
 const int DEFAULT_PCNTG_DELAY = 50;  // 50 ms
 const int DEFAULT_COLOR_STEP = 5;     // 5 gray values, 51 steps, 500 ms default duration
 const int DEFAULT_PCNTG_STEP = 51;    // 20 % brightness, 5 steps, 250 ms default duration
-const int LED_MAXVALUE = 255;
+const int LED_MAXVALUE = 192;
 const int LED_MINVALUE = 0;
 const int ACCEL_SENSITIVITY_SCALE = 8192;
 
 // CHIP SPECIFIC STUFF
-const int CHIP_PERSON = 5;    // color and identifier for persona chip
+/**
+  chip colors
+  0 = black / no color
+  1 = red
+  2 = green
+  3 = blue
+  4 = lime
+  5 = purple
+  6 = cyan
+  7 = white
+*/
+const int CHIP_PERSON = 7;    // color and identifier for persona chip
 const int CHIP_FUEL = 4;      // color and identifier for fuel chip
-const int CHIP_TRUNK = 7;     // color and identifier for trunk chip
-const float RADIUS = 4.0;    // radius of base station and chips - entspricht dem deckel eines kleinen nutellaglases
+const int CHIP_TRUNK = 5;     // color and identifier for trunk chip
+const float RADIUS = 8.0;    // radius of base station and chips
 // fuel chip
 float fuelFill = 0.9;         // amount of tankfüllung
 int fuelScale = 2;            // how many km equal 1 cm rolling?
@@ -48,8 +58,8 @@ int trunkScale = 5;
 // GLOBAL VARS
 int ledIntensity[ LED_COUNT ];  // contains brightness of each led
 int ledPin[ LED_COUNT ];        // contains pin for each led
-int defaultChip = CHIP_PERSON;  // which color to show when there is no chip on base station
-int lastChip = CHIP_PERSON;     // to check whether the chip was changed or not
+int defaultChip = CHIP_TRUNK;  // which color to show when there is no chip on base station
+int lastChip = CHIP_TRUNK;     // to check whether the chip was changed or not
 boolean standing = true;        // if base station is standing for sure
 boolean lying = false;          // if base station is lying for sure
 float cumulativeRevolutions = 0.0;  // how many revolutions since last standing
@@ -72,7 +82,6 @@ VectorFloat gravity;    // [x, y, z]            gravity vector
 VectorInt16 aa;         // [x, y, z]            accel sensor measurements
 VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements 
 float acceleration[ 3 ];               // current acceleration values
-float baseAcceleration[ 3 ];   // acceleration values at initialization
 RunningMedian xAccelerations = RunningMedian( 6 );
 RunningMedian yAccelerations = RunningMedian( 6 );
 RunningMedian zAccelerations = RunningMedian( 6 );
@@ -84,6 +93,7 @@ int COLOR_NOPE[3] = { 0, 0, 0 };
 int COLOR_GREEN[3] = { 0, 255, 0 };
 int COLOR_RED[3] = { 255, 0, 0 };
 int COLOR_BLUE[3] = { 0, 0, 255 };
+int COLOR_YELLOW[3] = {255, 255, 0};
 int currentColor[3] = { 0, 0, 0 };
 
 //Sets brightness of LED
@@ -143,21 +153,43 @@ void dmpDataReady() {
 
 // Basic setup, actual initialization is done in initialize()
 void setup()  { 
-  delay( 2000 );
   // serial monitor
-  Serial.begin( 9600 );
-  Serial.println( "Running setup..." );
+  Serial.begin( 57600 );
+  //Serial.println( "Running setup..." );
+
+  // bridge pin
+  pinMode( BRIDGE_PIN, INPUT );
+  // led pins
+  ledPin[ 0 ] = 10;
+  ledPin[ 1 ] = 9;
+  ledPin[ 2 ] = 6;
+  ledPin[ 3 ] = 5;
+  ledPin[ 4 ] = 11;
+
+  // turn leds on
+  setColor( COLOR_BLUE );
+  powerLed( 0, HIGH );
+  delay( 100 );
+  powerLed( 1, HIGH );
+  delay( 100 );
+  powerLed( 2, HIGH );
+  delay( 100 );
+  powerLed( 3, HIGH );
+  delay( 100 );
+  powerLed( 4, HIGH );
+  delay( 100 );
+
   // Gyro stuff
   Wire.begin();
-  Serial.println( "Init I2C...");
+  //Serial.println( "Init I2C...");
   mpu.initialize();
-  Serial.println( "Test gyro connection...");
-  Serial.println( mpu.testConnection() ? "Successful." : "Failed.");
-  Serial.println( "Init DMP...");
+  //Serial.println( "Test gyro connection...");
+  //Serial.println( mpu.testConnection() ? "Successful." : "Failed.");
+  //Serial.println( "Init DMP...");
   devStatus = mpu.dmpInitialize();
   if ( devStatus == 0 ) {
     // success
-    Serial.println( "Success.");
+    //Serial.println( "Success.");
     mpu.setDMPEnabled( true );
     //enable interrupt detection
     //attachInterrupt( 0, dmpDataReady, RISING );
@@ -166,28 +198,14 @@ void setup()  {
     packetSize = mpu.dmpGetFIFOPacketSize();
   } else {
     // failed
-    Serial.println( "Failed.");
+    //Serial.println( "Failed.");
   }
-  Serial.println( "Gyro initialization passed.");
+  //Serial.println( "Gyro initialization passed.");
 }
 
 void initialize() {
 
-  // save base acceleration values
-  baseAcceleration[ 0 ] = acceleration[ 0 ];
-  baseAcceleration[ 1 ] = acceleration[ 1 ];
-  baseAcceleration[ 2 ] = acceleration[ 2 ];
-
-  // bridge pin
-  pinMode( BRIDGE_PIN, INPUT );
-  // led pins
-  ledPin[ 0 ] = 5;
-  ledPin[ 1 ] = 6;
-  // turn leds on
-  setColor( COLOR_BLUE );
-  powerLed( 0, HIGH );
-  powerLed( 1, HIGH );
-
+  setColor( COLOR_NOPE );
   delay( 1000 );
 
   initialized = true;
@@ -202,7 +220,7 @@ boolean isBridged( ) {
 
 // Fades a LED brightness to target value
 void fadeLed( int led, int targetval ) {
-  Serial.println( "==== fading ==== ");
+  //Serial.println( "==== fading ==== ");
   int currentval = ledIntensity[ led ];
   int stepp = currentval < targetval ? DEFAULT_PCNTG_STEP : DEFAULT_PCNTG_STEP * (-1);
   while ( currentval != targetval ) {
@@ -278,7 +296,7 @@ void fadeToColor( int color[ 3 ], int stepdelay ) {
 
   // while there is a reason to fade, fade
   while ( fadeRed || fadeGreen || fadeBlue ) {
-    Serial.println( "=== fading color ===");
+    //Serial.println( "=== fading color ===");
     // fade red
     if ( fadeRed ) {
       tempRed = currentColor[ 0 ] + stepRed;
@@ -303,18 +321,18 @@ void fadeToColor( int color[ 3 ], int stepdelay ) {
   }
 }
 
-// Reads voltage from A0 and returns it
+// Reads voltage from potentiometer and returns it
 float getVoltage() {
-  float volt = analogRead( A0 ) * ( 5.0 / 1023.0 );
-  //Serial.print( volt );
-  //Serial.println( " V");
+  float volt = analogRead( POTI_PIN ); // * ( 5.0 / 1023.0 );
+  Serial.print( volt );
+  Serial.println( " V");
   return volt;
 }
 
 // Reads voltage and transforms it into chip code
 int getChipCode() {
   float volt = getVoltage();
-  int chip = floor( ( (int) volt * 50 ) / 32 ); // 0-5 * 50 = 0-250 ~ 2^8 / 2^5 = 2^3 = 8 chips
+  int chip = floor(  volt / 128.0 ); // 1024 werte / 128 = 8 bereiche
   return min( chip, 7 ); // falls doch mal mehr als 5V reingehen sollten
 }
 
@@ -323,50 +341,50 @@ void setColorFromChipCode( int chip, int *color ) {
   
   if ( chip == 0 ) {
     // no color
-    Serial.println( "BLACK" );
-    color[ 0 ] = 0;
-    color[ 1 ] = 0;
-    color[ 2 ] = 0;
+    //Serial.println( "BLACK" );
+    color[ 0 ] = LED_MINVALUE;
+    color[ 1 ] = LED_MINVALUE;
+    color[ 2 ] = LED_MINVALUE;
   }
   if ( chip == 1 ) {
     //red
-    Serial.println( "RED" );
+    //Serial.println( "RED" );
     color[ 0 ] = LED_MAXVALUE;
     color[ 1 ] = LED_MINVALUE;
     color[ 2 ] = LED_MINVALUE;
   } else if ( chip == 2 ) {
     //green
-    Serial.println( "GREEN" );
+    //Serial.println( "GREEN" );
     color[ 0 ] = LED_MINVALUE;
     color[ 1 ] = LED_MAXVALUE;
     color[ 2 ] = LED_MINVALUE;
   } else if ( chip == 3 ) {
     //blue
-    Serial.println( "BLUE" );
+    //Serial.println( "BLUE" );
     color[ 0 ] = LED_MINVALUE;
     color[ 1 ] = LED_MINVALUE;
     color[ 2 ] = LED_MAXVALUE;
   } else if ( chip == 4 ) {
     // red + green
-    Serial.println( "LIME" );
+    //Serial.println( "LIME" );
     color[ 0 ] = LED_MAXVALUE;
     color[ 1 ] = LED_MAXVALUE;
     color[ 2 ] = LED_MINVALUE;
   } else if ( chip == 5 ) {
     //red + blue
-    Serial.println( "PURPLE" );
+    //Serial.println( "PURPLE" );
     color[ 0 ] = LED_MAXVALUE;
     color[ 1 ] = LED_MINVALUE;
     color[ 2 ] = LED_MAXVALUE;
   } else if ( chip == 6 ) {
     // blue + green
-    Serial.println( "CYAN" );
+    //Serial.println( "CYAN" );
     color[ 0 ] = LED_MINVALUE;
     color[ 1 ] = LED_MAXVALUE;
     color[ 2 ] = LED_MAXVALUE;
   } else {
     // red + green + blue
-    Serial.println( "WHITE" );
+    //Serial.println( "WHITE" );
     color[ 0 ] = LED_MAXVALUE;
     color[ 1 ] = LED_MAXVALUE;
     color[ 2 ] = LED_MAXVALUE;
@@ -388,16 +406,16 @@ void processGyro() {
   //mpuInterrupt = false;
   mpuIntStatus = mpu.getIntStatus();
   fifoCount = mpu.getFIFOCount();
-
+/*
   Serial.print( mpuIntStatus );
   Serial.print( "\t" );
   Serial.println( mpuIntStatus & 0x10 );
-  
+*/  
   // check for overflow
   if ( ( mpuIntStatus & 0x10 ) || fifoCount == 1024 ) {
     fifoOverflow = true;
     mpu.resetFIFO();
-    Serial.println( "=============>>> FIFO overflow");
+    //Serial.println( "=============>>> FIFO overflow");
   // else check for DMP data ready
   } else if ( mpuIntStatus & 0x02 ) {
     // wait for correct data length
@@ -416,7 +434,14 @@ void processGyro() {
     mpu.dmpGetAccel(&aa, fifoBuffer);
     mpu.dmpGetGravity(&gravity, &q);
     mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
-    
+    /*
+    Serial.print( "accel_pur\t" );
+    Serial.print( ( float ) aaReal.x / ACCEL_SENSITIVITY_SCALE );
+    Serial.print( "\t");
+    Serial.print( ( float ) aaReal.y / ACCEL_SENSITIVITY_SCALE );
+    Serial.print( "\t" );
+    Serial.println( ( float ) aaReal.z / ACCEL_SENSITIVITY_SCALE );
+    */
     // take average of last accelerations
     xAccelerations.add( ( float ) aaReal.x / ACCEL_SENSITIVITY_SCALE );
     yAccelerations.add( ( float ) aaReal.y / ACCEL_SENSITIVITY_SCALE );
@@ -425,13 +450,14 @@ void processGyro() {
     acceleration[ 0 ] = xAccelerations.getAverage();
     acceleration[ 1 ] = yAccelerations.getAverage();
     acceleration[ 2 ] = zAccelerations.getAverage();
-
-    Serial.print("accel\t");
+/*
+    Serial.print("accel_avg\t");
     Serial.print( acceleration[ 0 ] );
     Serial.print("\t");
     Serial.print( acceleration[ 1 ] );
     Serial.print("\t");
     Serial.println( acceleration[ 2 ] );
+    */
   }
 }
 
@@ -443,8 +469,8 @@ void updateStanding() {
   
   // Acceleraton on X/Y axis means lying
   float xy =  abs( acceleration[ 0 ] ) + abs( acceleration[ 1 ] );
-  lying = xy >= 0.5 && z < 0.1;
-  standing = z > 0.5;
+  lying = xy >= 0.5;
+  standing = z >= 0.4;
   /*  
     Serial.print( "standing?\t");
     Serial.println( standing );
@@ -527,38 +553,38 @@ void resetRevolutions() {
   Does unity communication too!
 */
 void processChip( int chip, boolean standing ) {
+  //Serial.println( "===== chip processing ===== ");
   if ( lastChip != chip ) {
       // chip is fresh!
       if ( lastChip == CHIP_TRUNK ) {
         // close trunk
-        Serial.println( "group|2#trunk|0" );
-        //delay( 100 );
+        #ifdef DEF_USE_UNITY
+          Serial.println( "group|2#trunk|0" );
+          delay( 100 );
+        #endif
       }
       if ( chip == CHIP_TRUNK ) {
         // open trunk
-        Serial.println( "group|2#trunk|1" );
-        //delay( 100 );
+        #ifdef DEF_USE_UNITY
+          Serial.println( "group|2#trunk|1" );
+          delay( 100 );
+        #endif
       }
       if ( lastChip == CHIP_PERSON ) {
-        powerLed( 0, HIGH );
         powerLed( 1, HIGH );
+        powerLed( 2, HIGH );
+        powerLed( 3, HIGH );
       }
       if ( chip == CHIP_PERSON ) {
         // show people
-        Serial.print( "group|2#person|0#present|0#color|" );
-        Serial.print( COLOR_RED[ 0 ], HEX );
-        Serial.print( COLOR_RED[ 1 ], HEX );
-        Serial.print( COLOR_RED[ 2 ], HEX );
-        Serial.println();
-        //delay( 100 );
-        Serial.print( "group|2#person|1#present|1#color|" );
-        Serial.print( COLOR_RED[ 0 ], HEX );
-        Serial.print( COLOR_RED[ 1 ], HEX );
-        Serial.print( COLOR_RED[ 2 ], HEX );
-        Serial.println();
-        //delay( 100 );
-        powerLed( 0, LOW );
-        powerLed( 1, HIGH );
+        #ifdef DEF_USE_UNITY
+          Serial.println( "group|2#person|0-0-0-1" );
+          delay( 100 );
+        #endif
+        powerLed( 0, HIGH );
+        powerLed( 1, LOW );
+        powerLed( 2, LOW );
+        powerLed( 3, LOW );
       }
     }
 
@@ -570,8 +596,10 @@ void processChip( int chip, boolean standing ) {
       fadeToPercentage( fuelFill );
     } else if ( chip == CHIP_TRUNK ) {
       // show amount of trunk space
-      Serial.println( "group|2#trunkspace|100" );
-      //delay( 100 );
+      #ifdef DEF_USE_UNITY
+        Serial.println( "group|2#trunkspace|100" );
+        delay( 100 );
+      #endif
       fadeToPercentage( 1.0 );
     }
   } else {
@@ -587,20 +615,25 @@ void processChip( int chip, boolean standing ) {
       // set percentage from distance/trunk
       float trunkFree = min( 1, convertRevolutionsToPath()*trunkScale / trunkCapacity );
       fadeToPercentage( trunkFree );
-      Serial.print( "group|2#trunkspace|" );
-      Serial.println( (int) ( trunkFree * 100 ) );
-      //delay( 100 );
+      #ifdef DEF_USE_UNITY
+        Serial.print( "group|2#trunkspace|" );
+        Serial.println( (int) ( trunkFree * 100 ) );
+        delay( 100 );
+      #endif
     }
   }
   lastChip = chip;
 }
 
 void loop() {
-  Serial.println( "loop ");
-  
   int chip = 0;
   int color[3];
 
+  #ifdef DEF_USE_UNITY
+    Serial.println( "group|2");
+    delay( 100 );
+  #endif
+  
   // get ypr values
   processGyro();
 
@@ -615,7 +648,10 @@ void loop() {
   // check if there is chip on base station
   if ( isBridged() ) { 
     // if yes, identify it
-    chip = getChipCode();
+    chip = CHIP_PERSON;
+    #ifdef DEF_USE_POTI
+      chip = getChipCode();
+    #endif
   } else {
     // else use default chip (second-top)
     chip = defaultChip;

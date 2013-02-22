@@ -4,7 +4,7 @@
 #include "MPU6050_6Axis_MotionApps20.h"
 #include <RunningMedian.h>
 
-//#define DEF_USE_POTI;
+#define DEF_USE_POTI;
 #define DEF_USE_UNITY;
 
 // PINS
@@ -43,8 +43,8 @@ const int ACCEL_SENSITIVITY_SCALE = 8192;
   7 = white
 */
 const int CHIP_PERSON = 6;    // color and identifier for persona chip
-const int CHIP_FUEL = 3;      // color and identifier for fuel chip
 const int CHIP_TRUNK = 7;     // color and identifier for trunk chip
+const int CHIP_KITT = 3;      // color and identifier for KITT
 const float RADIUS = 8.0;    // radius of base station and chips
 // fuel chip
 float fuelFill = 0.9;         // amount of tankfüllung
@@ -341,7 +341,13 @@ int getChipCode() {
 
 // Converts voltage to color code and writes it in color
 void setColorFromChipCode( int chip, int *color ) {
-  
+  if ( chip == CHIP_KITT ) {
+    color[ 0 ] = LED_MAXVALUE;
+    color[ 1 ] = LED_MINVALUE;
+    color[ 2 ] = LED_MINVALUE;
+    return;
+  }
+
   if ( chip == 0 ) {
     // no color
     //Serial.println( "BLACK" );
@@ -533,6 +539,45 @@ void updateRevolutions() {
   }
 }
 
+void doTheKnightRider() {
+  // turn off LEDs
+  for ( int i = 0; i <= LED_COUNT - 1; i++ ) {
+    fadeLed( i, 51 );
+  }
+  // set color to red
+  setColor( COLOR_RED );
+  // action!
+  boolean forward = true;
+  int i = 0;
+  while ( isBridged() ) {
+    Serial.println( "group|2" );
+
+    if ( forward ) {
+      if ( i - 2 >= 0 )
+        fadeLed( i - 2, 51 );
+      if ( i - 1 >= 0 )
+       fadeLed( i - 1, 204 );
+      fadeLed( i, LED_MAXVALUE );
+      if ( i + 1 < LED_COUNT )
+        fadeLed( i + 1, 102 );
+    } else {
+      if ( i + 2 < LED_COUNT )
+        fadeLed( i + 2, 51 );
+      if ( i + 1 < LED_COUNT )
+        fadeLed( i + 1, 51 );
+      fadeLed( i, LED_MAXVALUE );
+      if ( i - 1 >= 0 )
+        fadeLed( i - 1, 204 );
+    }
+
+    if ( i + 1 == LED_COUNT )
+      forward = false;
+    if ( i - 1 < 0 )
+      forward = true;
+    i = forward ? i + 1 : i - 1;
+  }
+}
+
 // Convert revolutions to distance in cm
 float convertRevolutionsToPath() {
   // convert revolutions to radians: revolutions * 2 PI
@@ -563,42 +608,47 @@ void resetRevolutions() {
 void processChip( int chip, boolean standing ) {
   //Serial.println( "===== chip processing ===== ");
   if ( lastChip != chip ) {
-      // chip is fresh!
-      if ( lastChip == CHIP_TRUNK ) {
-        // close trunk
-        powerLed( LED_COUNT - 1, HIGH );
-        #ifdef DEF_USE_UNITY
-          Serial.println( "group|2#trunk|0" );
-          delay( 100 );
-        #endif
-      }
-      if ( chip == CHIP_TRUNK ) {
-        // open trunk
-        powerLed( LED_COUNT - 1, LOW );
-        #ifdef DEF_USE_UNITY
-          Serial.println( "group|2#trunk|1" );
-          delay( 100 );
-        #endif
-        fadeToPercentage( trunkFill );
-      }
-      if ( lastChip == CHIP_PERSON ) {
-        powerLed( 1, HIGH );
-        powerLed( 2, HIGH );
-        powerLed( 3, HIGH );
-      }
-      if ( chip == CHIP_PERSON ) {
-        // show people
-        #ifdef DEF_USE_UNITY
-          Serial.println( "group|2#person|1-0-0-0-1" );
-          delay( 100 );
-        #endif
-        powerLed( 0, HIGH );
-        powerLed( 1, LOW );
-        powerLed( 2, LOW );
-        powerLed( 3, LOW );
-        powerLed( 4, HIGH );
-      }
+    // chip is fresh!
+    if ( lastChip == CHIP_TRUNK ) {
+      // close trunk
+      powerLed( LED_COUNT - 1, HIGH );
+      #ifdef DEF_USE_UNITY
+        Serial.println( "group|2#trunk|0" );
+        delay( 100 );
+      #endif
     }
+    if ( chip == CHIP_TRUNK ) {
+      // open trunk
+      powerLed( LED_COUNT - 1, LOW );
+      #ifdef DEF_USE_UNITY
+        Serial.println( "group|2#trunk|1" );
+        delay( 100 );
+      #endif
+      fadeToPercentage( trunkFill );
+    }
+    if ( lastChip == CHIP_PERSON ) {
+      powerLed( 1, HIGH );
+      powerLed( 2, HIGH );
+      powerLed( 3, HIGH );
+    }
+    if ( chip == CHIP_PERSON ) {
+      // show people
+      #ifdef DEF_USE_UNITY
+        Serial.println( "group|2#person|1-0-0-0-1" );
+        delay( 100 );
+      #endif
+      powerLed( 0, HIGH );
+      powerLed( 1, LOW );
+      powerLed( 2, LOW );
+      powerLed( 3, LOW );
+      powerLed( 4, HIGH );
+    }
+  }
+
+  // KITT does not care about standing or lying
+  if ( chip == CHIP_KITT ) {
+    doTheKnightRider();
+  }
 
   if ( standing ) {
     if ( chip == CHIP_PERSON ) {

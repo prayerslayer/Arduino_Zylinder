@@ -4,7 +4,7 @@
 #include "MPU6050_6Axis_MotionApps20.h"
 #include <RunningMedian.h>
 
-#define DEF_USE_POTI;
+//#define DEF_USE_POTI;
 #define DEF_USE_UNITY;
 
 // PINS
@@ -26,12 +26,12 @@ const int DEFAULT_COLOR_DELAY = 10;   // 10 ms
 const int DEFAULT_PCNTG_DELAY = 50;  // 50 ms
 const int DEFAULT_COLOR_STEP = 5;     // 5 gray values, 51 steps, 500 ms default duration
 const int DEFAULT_PCNTG_STEP = 51;    // 20 % brightness, 5 steps, 250 ms default duration
-const int LED_MAXVALUE = 192;
+const int LED_MAXVALUE = 255;
 const int LED_MINVALUE = 0;
 const int ACCEL_SENSITIVITY_SCALE = 8192;
 
 // CHIP SPECIFIC STUFF
-/**
+/*
   chip colors
   0 = black / no color
   1 = red
@@ -42,24 +42,24 @@ const int ACCEL_SENSITIVITY_SCALE = 8192;
   6 = cyan
   7 = white
 */
-const int CHIP_PERSON = 7;    // color and identifier for persona chip
-const int CHIP_FUEL = 4;      // color and identifier for fuel chip
-const int CHIP_TRUNK = 5;     // color and identifier for trunk chip
+const int CHIP_PERSON = 6;    // color and identifier for persona chip
+const int CHIP_FUEL = 3;      // color and identifier for fuel chip
+const int CHIP_TRUNK = 7;     // color and identifier for trunk chip
 const float RADIUS = 8.0;    // radius of base station and chips
 // fuel chip
 float fuelFill = 0.9;         // amount of tankfüllung
 int fuelScale = 2;            // how many km equal 1 cm rolling?
 int fuelRange = fuelFill * 35/4.5 * 100;  // based on toyota aigo
 // trunk chip
-float trunkMetering = 0;
 int trunkCapacity = 140;      // liters
-int trunkScale = 5;
+float trunkFill = 0.25;
+int trunkScale = 2;
 
 // GLOBAL VARS
 int ledIntensity[ LED_COUNT ];  // contains brightness of each led
 int ledPin[ LED_COUNT ];        // contains pin for each led
 int defaultChip = CHIP_TRUNK;  // which color to show when there is no chip on base station
-int lastChip = CHIP_TRUNK;     // to check whether the chip was changed or not
+int lastChip = -1;     // to check whether the chip was changed or not
 boolean standing = true;        // if base station is standing for sure
 boolean lying = false;          // if base station is lying for sure
 float cumulativeRevolutions = 0.0;  // how many revolutions since last standing
@@ -82,10 +82,11 @@ VectorFloat gravity;    // [x, y, z]            gravity vector
 VectorInt16 aa;         // [x, y, z]            accel sensor measurements
 VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements 
 float acceleration[ 3 ];               // current acceleration values
-RunningMedian xAccelerations = RunningMedian( 6 );
-RunningMedian yAccelerations = RunningMedian( 6 );
-RunningMedian zAccelerations = RunningMedian( 6 );
-
+/*
+RunningMedian xAccelerations = RunningMedian( 1 );
+RunningMedian yAccelerations = RunningMedian( 1 );
+RunningMedian zAccelerations = RunningMedian( 1 );
+*/
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
 
 // color codes
@@ -168,16 +169,16 @@ void setup()  {
 
   // turn leds on
   setColor( COLOR_BLUE );
-  powerLed( 0, HIGH );
-  delay( 100 );
-  powerLed( 1, HIGH );
-  delay( 100 );
-  powerLed( 2, HIGH );
-  delay( 100 );
-  powerLed( 3, HIGH );
-  delay( 100 );
-  powerLed( 4, HIGH );
-  delay( 100 );
+  for( int i = 0; i <= LED_COUNT - 1; i++ ) {
+    powerLed( i, HIGH );
+  }
+  
+  delay( 500 );
+  
+  for( int i = LED_COUNT - 1; i >= 0; i-- ) {
+    powerLed( i, LOW );
+    delay( 100 );
+  }
 
   // Gyro stuff
   Wire.begin();
@@ -205,9 +206,11 @@ void setup()  {
 
 void initialize() {
 
-  setColor( COLOR_NOPE );
-  delay( 1000 );
-
+  for ( int i = 0; i <= LED_COUNT - 1; i++ ) {
+    powerLed( i, HIGH );
+    delay( 100 );
+  }
+  delay( 500 );
   initialized = true;
 }
 
@@ -324,8 +327,8 @@ void fadeToColor( int color[ 3 ], int stepdelay ) {
 // Reads voltage from potentiometer and returns it
 float getVoltage() {
   float volt = analogRead( POTI_PIN ); // * ( 5.0 / 1023.0 );
-  Serial.print( volt );
-  Serial.println( " V");
+  //Serial.print( volt );
+  //Serial.println( " V");
   return volt;
 }
 
@@ -443,6 +446,7 @@ void processGyro() {
     Serial.println( ( float ) aaReal.z / ACCEL_SENSITIVITY_SCALE );
     */
     // take average of last accelerations
+    /*
     xAccelerations.add( ( float ) aaReal.x / ACCEL_SENSITIVITY_SCALE );
     yAccelerations.add( ( float ) aaReal.y / ACCEL_SENSITIVITY_SCALE );
     zAccelerations.add( ( float ) aaReal.z / ACCEL_SENSITIVITY_SCALE );
@@ -450,6 +454,10 @@ void processGyro() {
     acceleration[ 0 ] = xAccelerations.getAverage();
     acceleration[ 1 ] = yAccelerations.getAverage();
     acceleration[ 2 ] = zAccelerations.getAverage();
+    */
+    acceleration[ 0 ] = ( float ) aaReal.x / ACCEL_SENSITIVITY_SCALE;
+    acceleration[ 1 ] = ( float ) aaReal.y / ACCEL_SENSITIVITY_SCALE;
+    acceleration[ 2 ] = ( float ) aaReal.z / ACCEL_SENSITIVITY_SCALE;
 /*
     Serial.print("accel_avg\t");
     Serial.print( acceleration[ 0 ] );
@@ -558,6 +566,7 @@ void processChip( int chip, boolean standing ) {
       // chip is fresh!
       if ( lastChip == CHIP_TRUNK ) {
         // close trunk
+        powerLed( LED_COUNT - 1, HIGH );
         #ifdef DEF_USE_UNITY
           Serial.println( "group|2#trunk|0" );
           delay( 100 );
@@ -565,10 +574,12 @@ void processChip( int chip, boolean standing ) {
       }
       if ( chip == CHIP_TRUNK ) {
         // open trunk
+        powerLed( LED_COUNT - 1, LOW );
         #ifdef DEF_USE_UNITY
           Serial.println( "group|2#trunk|1" );
           delay( 100 );
         #endif
+        fadeToPercentage( trunkFill );
       }
       if ( lastChip == CHIP_PERSON ) {
         powerLed( 1, HIGH );
@@ -578,46 +589,51 @@ void processChip( int chip, boolean standing ) {
       if ( chip == CHIP_PERSON ) {
         // show people
         #ifdef DEF_USE_UNITY
-          Serial.println( "group|2#person|0-0-0-1" );
+          Serial.println( "group|2#person|1-0-0-0-1" );
           delay( 100 );
         #endif
         powerLed( 0, HIGH );
         powerLed( 1, LOW );
         powerLed( 2, LOW );
         powerLed( 3, LOW );
+        powerLed( 4, HIGH );
       }
     }
 
   if ( standing ) {
     if ( chip == CHIP_PERSON ) {
-      // nothing happens
-    } else if ( chip == CHIP_FUEL ) {
-      // show amount of fuel left
-      fadeToPercentage( fuelFill );
-    } else if ( chip == CHIP_TRUNK ) {
-      // show amount of trunk space
       #ifdef DEF_USE_UNITY
-        Serial.println( "group|2#trunkspace|100" );
+        Serial.println( "group|2#person|1-0-0-0-1" );
         delay( 100 );
       #endif
-      fadeToPercentage( 1.0 );
+    } else if ( chip == CHIP_TRUNK ) {
+      // show amount of trunk space
+      fadeToPercentage( trunkFill );
+      #ifdef DEF_USE_UNITY
+        Serial.print( "group|2#trunkspace|" );
+        Serial.println( (int) round( trunkFill * 100 ) );
+        delay( 100 );
+        Serial.println( "group|2#trunk|1" );
+        delay( 100 );
+      #endif
     }
   } else {
     // lying
     if ( chip == CHIP_PERSON ) {
-      // do nothing
-    } else if ( chip == CHIP_FUEL ) {
-      // set percentage from distance/maxdistance
-      float fuelRangeAvailable = min( fuelFill, convertRevolutionsToPath() * fuelScale / fuelRange );
-      fadeToPercentage( fuelRangeAvailable );
-      // no unity here
+      #ifdef DEF_USE_UNITY
+        Serial.println( "group|2#person|1-0-0-0-1" );
+        delay( 100 );
+      #endif
     } else if ( chip == CHIP_TRUNK ) {
       // set percentage from distance/trunk
-      float trunkFree = min( 1, convertRevolutionsToPath()*trunkScale / trunkCapacity );
+      // 6 cm * 5 / 150 + 0.25 = 12/100
+      float trunkFree = max( trunkFill, min( trunkFill + convertRevolutionsToPath() * trunkScale / trunkCapacity, 1 ) );
       fadeToPercentage( trunkFree );
       #ifdef DEF_USE_UNITY
         Serial.print( "group|2#trunkspace|" );
         Serial.println( (int) ( trunkFree * 100 ) );
+        delay( 100 );
+        Serial.println( "group|2#trunk|1" );
         delay( 100 );
       #endif
     }
@@ -638,7 +654,7 @@ void loop() {
   processGyro();
 
   // wait to get stable values
-  if ( millis() < 5000 )
+  if ( millis() < 3000 )
     return;
 
   // initialize LEDs and stuff

@@ -5,7 +5,7 @@
 #include <RunningMedian.h>
 
 //#define DEF_USE_POTI;
-#define DEF_USE_UNITY;
+//#define DEF_USE_UNITY;
 
 // PINS
 const int POTI_PIN = A1;   // which pin has the potentiometer attached?
@@ -43,7 +43,8 @@ const int ACCEL_SENSITIVITY_SCALE = 8192;
   7 = white
 */
 const int CHIP_PERSON = 6;    // color and identifier for persona chip
-const int CHIP_FUEL = 3;      // color and identifier for fuel chip
+const int CHIP_FUEL = 4;      // color and identifier for fuel chip
+const int CHIP_KITT = 3;
 const int CHIP_TRUNK = 7;     // color and identifier for trunk chip
 const float RADIUS = 8.0;    // radius of base station and chips
 // fuel chip
@@ -175,7 +176,7 @@ void setup()  {
   
   delay( 500 );
   
-  for( int i = LED_COUNT - 1; i >= 0; i-- ) {
+  for( int i = LED_COUNT - 1; i >= 1; i-- ) {
     powerLed( i, LOW );
     delay( 100 );
   }
@@ -206,7 +207,7 @@ void setup()  {
 
 void initialize() {
 
-  for ( int i = 0; i <= LED_COUNT - 1; i++ ) {
+  for ( int i = 1; i <= LED_COUNT - 1; i++ ) {
     powerLed( i, HIGH );
     delay( 100 );
   }
@@ -553,6 +554,40 @@ void resetRevolutions() {
   lastQuadrant = 0;
 }
 
+void doTheKnightRider() {
+  setColor( COLOR_RED );
+  for ( int i = 0; i <= LED_COUNT - 1; i++ ) {
+    setLedBrightness( i, 51 );
+  }
+  int i = 0;
+  boolean forward = true;
+  while( isBridged() ) {
+    if ( forward ) {
+      if ( i - 1 >= 0 ) {
+        fadeLed( i - 1, 51 );
+        fadeLed( i, LED_MAXVALUE );
+      }
+    } else {
+      if ( i + 1 <= LED_COUNT - 1 ) {
+        fadeLed( i + 1, 51 );
+        fadeLed( i, LED_MAXVALUE );
+      }
+    }
+    
+    if ( forward ) {
+      if ( i + 1 >= LED_COUNT ) {
+        forward = false;
+      }
+    } else {
+      if ( i - 1 < 0 ) {
+        forward = true;
+      }
+    }
+    
+    i = forward ? i + 1 : i - 1;
+  }
+}
+
 /* 
   Contains ALL the actions that need to be done in case
     *) the chip changed
@@ -563,42 +598,45 @@ void resetRevolutions() {
 void processChip( int chip, boolean standing ) {
   //Serial.println( "===== chip processing ===== ");
   if ( lastChip != chip ) {
-      // chip is fresh!
-      if ( lastChip == CHIP_TRUNK ) {
-        // close trunk
-        powerLed( LED_COUNT - 1, HIGH );
-        #ifdef DEF_USE_UNITY
-          Serial.println( "group|2#trunk|0" );
-          delay( 100 );
-        #endif
-      }
-      if ( chip == CHIP_TRUNK ) {
-        // open trunk
-        powerLed( LED_COUNT - 1, LOW );
-        #ifdef DEF_USE_UNITY
-          Serial.println( "group|2#trunk|1" );
-          delay( 100 );
-        #endif
-        fadeToPercentage( trunkFill );
-      }
-      if ( lastChip == CHIP_PERSON ) {
-        powerLed( 1, HIGH );
-        powerLed( 2, HIGH );
-        powerLed( 3, HIGH );
-      }
-      if ( chip == CHIP_PERSON ) {
-        // show people
-        #ifdef DEF_USE_UNITY
-          Serial.println( "group|2#person|1-0-0-0-1" );
-          delay( 100 );
-        #endif
-        powerLed( 0, HIGH );
-        powerLed( 1, LOW );
-        powerLed( 2, LOW );
-        powerLed( 3, LOW );
-        powerLed( 4, HIGH );
-      }
+    // chip is fresh!
+    if ( lastChip == CHIP_TRUNK ) {
+      // close trunk
+      powerLed( LED_COUNT - 1, HIGH );
+      #ifdef DEF_USE_UNITY
+        Serial.println( "group|2#trunk|0" );
+        delay( 100 );
+      #endif
     }
+    if ( chip == CHIP_TRUNK ) {
+      // open trunk
+      powerLed( LED_COUNT - 1, LOW );
+      #ifdef DEF_USE_UNITY
+        Serial.println( "group|2#trunk|1" );
+        delay( 100 );
+      #endif
+      fadeToPercentage( trunkFill );
+    }
+    if ( lastChip == CHIP_PERSON ) {
+      powerLed( 1, HIGH );
+      powerLed( 2, HIGH );
+      powerLed( 3, HIGH );
+    }
+    if ( chip == CHIP_PERSON ) {
+      // show people
+      #ifdef DEF_USE_UNITY
+        Serial.println( "group|2#person|1-0-0-0-1" );
+        delay( 100 );
+      #endif
+      powerLed( 0, HIGH );
+      powerLed( 1, LOW );
+      powerLed( 2, LOW );
+      powerLed( 3, LOW );
+      powerLed( 4, HIGH );
+    }
+  }
+
+  if ( chip == CHIP_KITT )
+    doTheKnightRider();
 
   if ( standing ) {
     if ( chip == CHIP_PERSON ) {
@@ -626,7 +664,6 @@ void processChip( int chip, boolean standing ) {
       #endif
     } else if ( chip == CHIP_TRUNK ) {
       // set percentage from distance/trunk
-      // 6 cm * 5 / 150 + 0.25 = 12/100
       float trunkFree = max( trunkFill, min( trunkFill + convertRevolutionsToPath() * trunkScale / trunkCapacity, 1 ) );
       fadeToPercentage( trunkFree );
       #ifdef DEF_USE_UNITY
@@ -664,7 +701,7 @@ void loop() {
   // check if there is chip on base station
   if ( isBridged() ) { 
     // if yes, identify it
-    chip = CHIP_PERSON;
+    chip = CHIP_KITT;
     #ifdef DEF_USE_POTI
       chip = getChipCode();
     #endif
